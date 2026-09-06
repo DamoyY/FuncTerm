@@ -1,8 +1,10 @@
 mod invocation;
+mod routing;
 mod stdio;
 use crate::shell::{ShellChoice, ShellStartup, shims};
 use anyhow::{Context as _, Result};
 use core::time::Duration;
+use routing::LaunchRoute;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::time::Instant;
@@ -14,10 +16,10 @@ pub(crate) fn run_if_requested() -> Result<Option<i32>> {
         return Ok(None);
     }
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
-    if interactive_arguments(choice, &arguments) {
-        return run_interactive(choice).map(Some);
+    match LaunchRoute::detect(choice, &arguments) {
+        LaunchRoute::ManagedSession => run_interactive(choice).map(Some),
+        LaunchRoute::NativeProcess => run_passthrough(choice, arguments).map(Some),
     }
-    run_passthrough(choice, arguments).map(Some)
 }
 fn requested_shell() -> Option<ShellChoice> {
     let argument = std::env::args_os().next()?;
@@ -42,9 +44,6 @@ fn is_shim_invocation() -> Result<bool> {
     })? == PathBuf::from(shim_dir)
         .canonicalize()
         .context("failed to resolve shim directory")?)
-}
-fn interactive_arguments(choice: ShellChoice, arguments: &[std::ffi::OsString]) -> bool {
-    choice.interactive_arguments(arguments)
 }
 fn run_passthrough(choice: ShellChoice, arguments: Vec<std::ffi::OsString>) -> Result<i32> {
     let status = Command::new(real_executable(choice)?)
@@ -77,7 +76,7 @@ fn spawn_shell(choice: ShellChoice, startup: ShellStartup) -> Result<std::proces
     for (name, value) in startup.env {
         command.env(name, value);
     }
-    stdio::attach_terminal_stdio(&mut command)?;
+    stdio::attach_session_stdio(&mut command)?;
     command
         .spawn()
         .with_context(|| format!("failed to spawn {}", choice.canonical_name()))

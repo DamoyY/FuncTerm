@@ -5,6 +5,9 @@ mod control_signal;
 mod failure;
 #[path = "cli/cases/history.rs"]
 mod history;
+#[cfg(test)]
+#[path = "cli/input_flow.rs"]
+mod input_flow;
 #[cfg(windows)]
 #[path = "cli/cases/powershell_template.rs"]
 mod powershell_template;

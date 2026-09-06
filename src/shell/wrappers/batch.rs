@@ -8,9 +8,12 @@ pub(in crate::shell) fn wrapper() -> String {
         "@CMD_PROTECTED_ENVIRONMENT_CAPTURE@",
         &super::variables::cmd_environment_capture(),
     );
-    super::VariableNamespace::new().render(&template::render_script(&captured))
+    super::VariableNamespace::new()
+        .render(&template::render_script(&captured))
+        .replace('\n', "\r\n")
 }
 const TEMPLATE: &str = r#"@echo off
+if "%~1"=="--capture" goto capture_user_state
 set "@VAR_command_id@=%~1"
 set "@VAR_directory@=%~2"
 set "@VAR_working_directory@=%~3"
@@ -63,12 +66,16 @@ if errorlevel 1 (
 call :command_time_millis
 set "@VAR_command_started_at@=%ERRORLEVEL%"
 set > "%~dp0@VAR_environment_before_file@.txt"
-setlocal DisableDelayedExpansion
-call "%~2\@INPUT_DIR@\@SCRIPT@" > "%~2\@OUTPUT_DIR@\@STDOUT@" 2> "%~2\@OUTPUT_DIR@\@STDERR@"
-> "%~dp0@VAR_exit_code_file@.txt" echo %ERRORLEVEL%
-cd > "%~dp0@VAR_cwd_after_file@.txt"
-set > "%~dp0@VAR_environment_after_file@.txt" 2> nul
-endlocal
+"%FUNCTERM_REAL_CMD%" /D /Q /V:OFF /S /C ""%~f0" --capture "%~2"" > "%~2\@OUTPUT_DIR@\@STDOUT@" 2> "%~2\@OUTPUT_DIR@\@STDERR@"
+if not exist "%~dp0@VAR_exit_code_file@.txt" exit %ERRORLEVEL%
+if not exist "%~dp0@VAR_cwd_after_file@.txt" (
+    echo CMD worker did not publish its working directory 1>&2
+    exit 1
+)
+if not exist "%~dp0@VAR_environment_after_file@.txt" (
+    echo CMD worker did not publish its environment 1>&2
+    exit 1
+)
 @CMD_PROTECTED_ENVIRONMENT_CAPTURE@
 for /f "usebackq delims=" %%e in ("%~dp0@VAR_environment_after_file@.txt") do set "%%e"
 @CMD_PROTECTED_ENVIRONMENT_RESTORE@
@@ -90,6 +97,12 @@ if errorlevel 1 (
 )
 call :restore_command_environment
 exit /b %@VAR_exit_code@%
+:capture_user_state
+call "%~2\@INPUT_DIR@\@SCRIPT@"
+> "%~dp0@VAR_exit_code_file@.txt" echo %ERRORLEVEL%
+cd > "%~dp0@VAR_cwd_after_file@.txt"
+set > "%~dp0@VAR_environment_after_file@.txt" 2> nul
+exit /b 0
 :prepend_shim_path
 if "%FUNCTERM_SHIM_DIR%"=="" exit /b 0
 set "@VAR_new_path@=%FUNCTERM_SHIM_DIR%"
@@ -135,3 +148,6 @@ if defined @VAR_had_previous_command_directory@ (
 )
 exit /b 0
 "#;
+#[cfg(test)]
+#[path = "../../../tests/unit/line_endings.rs"]
+mod tests;
