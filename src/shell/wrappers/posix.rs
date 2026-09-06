@@ -1,5 +1,7 @@
-use super::posix_dialect::PosixDialect;
+mod dialect;
+mod runner;
 use crate::shell::shims::SHIM_DIR_ENV;
+pub(super) use dialect::PosixDialect;
 pub(in crate::shell) fn bash_wrapper() -> String {
     let wrapper = format!(
         "set +o history
@@ -14,7 +16,7 @@ history -c
 	",
         path = path_function(false),
         shim_path = shim_path_function(false),
-        command = super::posix_function::command_function(PosixDialect::Bash),
+        command = runner::command_function(PosixDialect::Bash),
         dispatcher = super::template::posix_dispatcher()
     );
     super::VariableNamespace::new().render(&wrapper)
@@ -36,7 +38,7 @@ pub(in crate::shell) fn zsh_wrapper() -> String {
 	",
         path = path_function(true),
         shim_path = shim_path_function(true),
-        command = super::posix_function::command_function(PosixDialect::Zsh),
+        command = runner::command_function(PosixDialect::Zsh),
         dispatcher = super::template::posix_dispatcher()
     );
     super::VariableNamespace::new().render(&wrapper)

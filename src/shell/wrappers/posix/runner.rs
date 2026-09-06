@@ -1,4 +1,5 @@
-use super::posix_dialect::PosixDialect;
+use super::super::{start, variables};
+use super::PosixDialect;
 use crate::contract::{
     COMMAND_DIRECTORY_ENV, COMMAND_FILE, COMMAND_ID_ENV, COMMAND_INPUT_DIRECTORY,
     COMMAND_OUTPUT_DIRECTORY, COMMAND_STATE_DIRECTORY, DONE_FILE, HELPER_EXECUTABLE_ENV,
@@ -158,11 +159,11 @@ functerm_ensure_shims() {{
         command_id_env = COMMAND_ID_ENV,
         command_dir_env = COMMAND_DIRECTORY_ENV,
         previous_flags = dialect.previous_flags(),
-        environment_snapshot = super::variables::posix_environment_snapshot(),
-        environment_restore = super::variables::posix_environment_restore(),
+        environment_snapshot = variables::posix_environment_snapshot(),
+        environment_restore = variables::posix_environment_restore(),
         cd = dialect.cd(),
         test_one = dialect.test_arg("1"),
         test_three = dialect.test_arg("3"),
-        publish_start = super::start::posix(dialect),
+        publish_start = start::posix(dialect),
     )
 }

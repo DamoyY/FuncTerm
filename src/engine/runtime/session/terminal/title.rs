@@ -1,4 +1,4 @@
-use super::sequence::ProtocolEvent;
+use super::output_events::ProtocolEvent;
 use alloc::{collections::BTreeMap, sync::Arc};
 use anyhow::{Result, bail};
 use parking_lot::{Condvar, Mutex};

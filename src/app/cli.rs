@@ -176,5 +176,5 @@ fn write_done(
     )
 }
 #[cfg(test)]
-#[path = "cli/tests.rs"]
+#[path = "../../tests/unit/app/argument_parsing.rs"]
 mod tests;

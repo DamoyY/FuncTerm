@@ -9,7 +9,7 @@ use core::time::Duration;
 impl Tab {
     pub(in crate::engine::runtime::session::manager) fn manual_write(
         &self,
-        input: KeyboardInput,
+        input: &KeyboardInput,
         waiting: Duration,
     ) -> Result<ViewResult> {
         let session = self.live_session()?;

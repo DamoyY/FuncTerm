@@ -1,4 +1,4 @@
-use super::posix_dialect::PosixDialect;
+use super::posix::PosixDialect;
 use crate::contract::HELPER_EXECUTABLE_ENV;
 pub(super) const POWERSHELL: &str = "function Publish-FuncTermStart {
     param(

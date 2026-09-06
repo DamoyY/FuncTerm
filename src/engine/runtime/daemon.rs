@@ -6,7 +6,6 @@ use alloc::sync::Arc;
 use anyhow::{Context as _, Result};
 use interprocess::local_socket::prelude::*;
 use std::io;
-use std::sync::mpsc;
 use std::thread;
 mod control_signal;
 pub(crate) mod report;
@@ -26,44 +25,16 @@ fn run_inner(settings: Settings, startup_reporter: &mut StartupReporter) -> Resu
     let _daemon_instance = crate::runtime::daemon_lock::acquire_instance(&service_name)?;
     let manager = Arc::new(Manager::new(settings)?);
     let listener = crate::runtime::transport::listener(&service_name)?;
-    let (event_sender, event_receiver) = mpsc::channel();
-    spawn_request_receiver(listener, event_sender);
     startup_reporter.ready()?;
     loop {
-        match event_receiver
-            .recv()
-            .context("failed to receive daemon runtime event")?
-        {
-            DaemonEvent::Request(stream) => spawn_request_worker(Arc::clone(&manager), stream),
-            DaemonEvent::Error(error) => return Err(error),
+        match listener.accept() {
+            Ok(stream) => spawn_request_worker(Arc::clone(&manager), stream),
+            Err(error) if recoverable_accept_error(&error) => {
+                eprintln!("recoverable IPC accept error: {error}");
+            }
+            Err(error) => return Err(error).context("failed to accept IPC request"),
         }
     }
-}
-enum DaemonEvent {
-    Request(LocalSocketStream),
-    Error(anyhow::Error),
-}
-fn spawn_request_receiver(listener: LocalSocketListener, event_sender: mpsc::Sender<DaemonEvent>) {
-    let _worker = thread::spawn(move || {
-        loop {
-            match listener.accept() {
-                Ok(stream) => {
-                    if event_sender.send(DaemonEvent::Request(stream)).is_err() {
-                        return;
-                    }
-                }
-                Err(error) if recoverable_accept_error(&error) => {
-                    eprintln!("recoverable IPC accept error: {error}");
-                }
-                Err(error) => {
-                    let _send_result = event_sender.send(DaemonEvent::Error(anyhow::anyhow!(
-                        "failed to accept IPC request: {error}"
-                    )));
-                    return;
-                }
-            }
-        }
-    });
 }
 fn recoverable_accept_error(error: &io::Error) -> bool {
     if matches!(
@@ -144,7 +115,7 @@ fn dispatch(manager: &Arc<Manager>, request: Request) -> Result<Payload> {
             input,
             waiting,
         } => {
-            let view = manager.manual_write(&tab_id, input, waiting)?;
+            let view = manager.manual_write(&tab_id, &input, waiting)?;
             Ok(Payload::KeyboardWritten { view })
         }
         Request::SendCommand {
@@ -164,23 +135,5 @@ fn dispatch(manager: &Arc<Manager>, request: Request) -> Result<Payload> {
     }
 }
 #[cfg(test)]
-mod tests {
-    use std::io;
-    #[test]
-    fn interrupted_accept_error_is_recoverable() {
-        let error = io::Error::from(io::ErrorKind::Interrupted);
-        assert!(super::recoverable_accept_error(&error));
-    }
-    #[test]
-    fn permission_accept_error_is_fatal() {
-        let error = io::Error::from(io::ErrorKind::PermissionDenied);
-        assert!(!super::recoverable_accept_error(&error));
-    }
-    #[cfg(windows)]
-    #[test]
-    fn abandoned_named_pipe_accept_error_is_recoverable() {
-        let code = i32::try_from(windows::Win32::Foundation::ERROR_OPERATION_ABORTED.0).unwrap();
-        let error = io::Error::from_raw_os_error(code);
-        assert!(super::recoverable_accept_error(&error));
-    }
-}
+#[path = "../../../tests/unit/runtime/accept_errors.rs"]
+mod tests;

@@ -97,6 +97,7 @@ encoding_rs = "*"
 fs-err = "*"
 humantime = "*"
 interprocess = "*"
+itertools = "*"
 kill_tree = "*"
 libc = "*"
 mimalloc = { version = "*", features = ["v3"] }

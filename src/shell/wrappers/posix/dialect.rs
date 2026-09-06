@@ -1,11 +1,11 @@
 use crate::contract::{COMMAND_DIRECTORY_ENV, COMMAND_ID_ENV};
 #[derive(Clone, Copy)]
-pub(super) enum PosixDialect {
+pub(in crate::shell::wrappers) enum PosixDialect {
     Bash,
     Zsh,
 }
 impl PosixDialect {
-    pub(super) const fn emulate(self) -> &'static str {
+    pub(in crate::shell::wrappers) const fn emulate(self) -> &'static str {
         match self {
             Self::Bash => "",
             Self::Zsh => "    emulate -L zsh\n    setopt sh_word_split\n",

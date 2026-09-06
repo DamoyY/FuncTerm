@@ -1,9 +1,6 @@
 mod startup;
 use super::process;
-use super::{
-    process_tree,
-    shell_session::{ShellSession, ShellSessionParts},
-};
+use super::shell_session::{ShellSession, ShellSessionParts};
 use crate::contract::DISPATCH_FILE;
 use crate::runtime::config::Settings;
 use crate::runtime::protocol::EnvironmentSnapshot;
@@ -82,7 +79,7 @@ impl ShellLauncher {
         let ready_file = startup.ready_file.clone();
         apply_startup(&mut command, startup);
         command.cwd(starting_directory);
-        let process_tree = process_tree::ProcessTree::new();
+        let process_tree = process::ProcessTree::new();
         let mut child = pair
             .slave
             .spawn_command(command)

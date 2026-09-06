@@ -34,7 +34,7 @@ impl TabDirectory {
     pub(super) fn manual_write(
         &self,
         tab_id: &str,
-        input: KeyboardInput,
+        input: &KeyboardInput,
         waiting: core::time::Duration,
     ) -> Result<ViewResult> {
         self.require_tab(tab_id)?.manual_write(input, waiting)

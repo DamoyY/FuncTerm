@@ -3,7 +3,7 @@ use crate::runtime::session::manager::shell_session::KeyboardWriteFailure;
 use alloc::sync::Arc;
 use std::sync::{Barrier, mpsc};
 use std::thread;
-#[path = "test_support.rs"]
+#[path = "../../support/session_fixture.rs"]
 mod support;
 use support::{test_command, test_shell, test_shell_with_flush, test_shell_with_writer};
 #[test]
@@ -65,7 +65,7 @@ fn manual_write_rejects_idle_prompt() {
     let shell = test_shell(None);
     let error = shell
         .write_keyboard_for_running_command(
-            KeyboardInput::Bytes(b"typed".to_vec()),
+            &KeyboardInput::Bytes(b"typed".to_vec()),
             core::time::Duration::ZERO,
         )
         .unwrap_err();
@@ -76,7 +76,7 @@ fn manual_write_allows_running_command() {
     let shell = test_shell(Some("command-current"));
     shell
         .write_keyboard_for_running_command(
-            KeyboardInput::Bytes(b"typed".to_vec()),
+            &KeyboardInput::Bytes(b"typed".to_vec()),
             core::time::Duration::ZERO,
         )
         .unwrap();
@@ -86,7 +86,7 @@ fn raw_keyboard_bytes_skip_shell_text_normalization() {
     let (shell, written) = test_shell_with_writer(Some("command-current"));
     shell
         .write_keyboard_for_running_command(
-            KeyboardInput::Bytes(b"line\n".to_vec()),
+            &KeyboardInput::Bytes(b"line\n".to_vec()),
             core::time::Duration::ZERO,
         )
         .unwrap();
@@ -97,7 +97,7 @@ fn keyboard_text_uses_active_shell_normalization() {
     let (shell, written) = test_shell_with_writer(Some("command-current"));
     shell
         .write_keyboard_for_running_command(
-            KeyboardInput::Text("line\n".to_owned()),
+            &KeyboardInput::Text("line\n".to_owned()),
             core::time::Duration::ZERO,
         )
         .unwrap();
@@ -110,7 +110,7 @@ fn output_wait_does_not_hold_the_busy_state_lock() {
     let writing_shell = Arc::clone(&shared_shell);
     let writer = thread::spawn(move || {
         writing_shell.write_keyboard_for_running_command(
-            KeyboardInput::Bytes(b"typed".to_vec()),
+            &KeyboardInput::Bytes(b"typed".to_vec()),
             core::time::Duration::from_secs(10),
         )
     });

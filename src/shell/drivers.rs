@@ -146,17 +146,5 @@ pub(super) fn os_strings_lower(arguments: &[OsString]) -> Option<Vec<String>> {
         .collect()
 }
 #[cfg(test)]
-mod tests {
-    use super::{InvocationTerminator, ShellInvocation};
-    #[test]
-    fn invocation_rejects_embedded_line_breaks() {
-        for line in ["command\nnext", "command\rnext"] {
-            let result =
-                ShellInvocation::new(line.to_owned(), InvocationTerminator::CarriageReturn);
-            assert!(
-                result.is_err(),
-                "invocation line with a line break should be rejected"
-            );
-        }
-    }
-}
+#[path = "../../tests/unit/shell/dispatch.rs"]
+mod tests;

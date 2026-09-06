@@ -70,31 +70,24 @@ where
     W: Write,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut offset = 0_usize;
-        while offset < buf.len() {
-            if self.pending.len() == SIZE {
-                self.flush_chunk(true)?;
-            }
-            let available = SIZE.saturating_sub(self.pending.len());
-            let consumed = available.min(buf.len().saturating_sub(offset));
-            let end = offset.saturating_add(consumed);
-            let portion = buf.get(offset..end).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "invalid IPC write range")
-            })?;
-            self.pending.extend_from_slice(portion);
-            offset = end;
+        if buf.is_empty() {
+            return Ok(0);
         }
-        Ok(buf.len())
+        if self.pending.len() == SIZE {
+            self.flush_chunk(true)?;
+        }
+        let consumed = (SIZE - self.pending.len()).min(buf.len());
+        let (portion, _) = buf.split_at(consumed);
+        self.pending.extend_from_slice(portion);
+        Ok(consumed)
     }
     fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
 }
 struct FrameReader<'reader, R> {
-    reader: &'reader mut R,
-    remaining: usize,
+    chunk: io::Take<&'reader mut R>,
     continues: bool,
-    finished: bool,
 }
 impl<'reader, R> FrameReader<'reader, R>
 where
@@ -105,26 +98,9 @@ where
             return Ok(None);
         };
         Ok(Some(Self {
-            reader,
-            remaining,
+            chunk: reader.take(remaining),
             continues,
-            finished: false,
         }))
-    }
-    fn advance(&mut self) -> io::Result<()> {
-        if !self.continues {
-            self.finished = true;
-            return Ok(());
-        }
-        let Some((remaining, continues)) = read_header(self.reader, false)? else {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "IPC stream ended before a continuation chunk",
-            ));
-        };
-        self.remaining = remaining;
-        self.continues = continues;
-        Ok(())
     }
 }
 impl<R> Read for FrameReader<'_, R>
@@ -132,56 +108,52 @@ where
     R: Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if buf.is_empty() || self.finished {
+        if buf.is_empty() {
             return Ok(0);
         }
-        while self.remaining == 0 {
-            self.advance()?;
-            if self.finished {
+        while self.chunk.limit() == 0 {
+            if !self.continues {
                 return Ok(0);
             }
+            let (remaining, continues) =
+                read_header(self.chunk.get_mut(), false)?.ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "IPC stream ended before a continuation chunk",
+                    )
+                })?;
+            self.chunk.set_limit(remaining);
+            self.continues = continues;
         }
-        let readable = self.remaining.min(buf.len());
-        let target = buf
-            .get_mut(..readable)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid IPC read range"))?;
-        let read_count = self.reader.read(target)?;
+        let read_count = self.chunk.read(buf)?;
         if read_count == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "IPC stream ended while reading a frame chunk",
             ));
         }
-        self.remaining = self.remaining.saturating_sub(read_count);
         Ok(read_count)
     }
 }
-fn read_header<R>(reader: &mut R, eof_allowed: bool) -> io::Result<Option<(usize, bool)>>
+fn read_header<R>(reader: &mut R, eof_allowed: bool) -> io::Result<Option<(u64, bool)>>
 where
     R: Read,
 {
     let mut header = [0_u8; 4];
-    let mut offset = 0_usize;
-    while offset < header.len() {
-        let remaining = header.get_mut(offset..).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "invalid IPC header range")
-        })?;
-        match reader.read(remaining) {
-            Ok(0) if offset == 0 && eof_allowed => return Ok(None),
-            Ok(0) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "IPC stream ended while reading a frame length",
-                ));
-            }
-            Ok(read_count) => offset = offset.saturating_add(read_count),
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => return Err(error),
+    let mut bounded = reader.take(4);
+    match bounded.read_exact(&mut header) {
+        Err(error)
+            if eof_allowed
+                && bounded.limit() == 4
+                && error.kind() == io::ErrorKind::UnexpectedEof =>
+        {
+            return Ok(None);
         }
+        result => result?,
     }
     let encoded = u32::from_be_bytes(header);
     let continues = encoded & CONTINUATION_FLAG != 0;
-    let length = usize::try_from(encoded & LENGTH_MASK).map_err(io::Error::other)?;
+    let length = u64::from(encoded & LENGTH_MASK);
     if continues && length == 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

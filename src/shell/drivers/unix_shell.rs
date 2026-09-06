@@ -51,16 +51,5 @@ fn initialization_script(
     Ok(crate::shell::wrappers::VariableNamespace::new().render(&initialization))
 }
 #[cfg(test)]
-mod tests {
-    use crate::shell::ShellChoice;
-    #[test]
-    fn invocation_uses_line_feed() {
-        for choice in [ShellChoice::Bash, ShellChoice::Zsh] {
-            let bytes = crate::shell::drivers::invocation(choice)
-                .unwrap()
-                .unwrap()
-                .into_bytes();
-            assert_eq!(bytes, b"f\n");
-        }
-    }
-}
+#[path = "../../../tests/unit/shell/drivers/posix_setup.rs"]
+mod tests;

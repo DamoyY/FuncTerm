@@ -1,6 +1,7 @@
 mod cleanup;
 mod input;
-use super::{command::ManagedCommand, process, process_tree};
+pub(super) mod process;
+use super::command::ManagedCommand;
 use crate::runtime::session::records::{CommandRecord, read_done};
 use crate::runtime::session::terminal::{CommandTitle, Terminal};
 use crate::shell::{ShellChoice, shims};
@@ -22,7 +23,7 @@ pub(super) struct ShellSession {
     dispatch_file: PathBuf,
     active_shell_file: PathBuf,
     command_start_timeout: Duration,
-    process_tree: process_tree::ProcessTree,
+    process_tree: process::ProcessTree,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     slave: Mutex<Option<Box<dyn SlavePty + Send>>>,
     reader: Option<JoinHandle<()>>,
@@ -38,7 +39,7 @@ pub(super) struct ShellSessionParts {
     pub(super) dispatch_file: PathBuf,
     pub(super) active_shell_file: PathBuf,
     pub(super) command_start_timeout: Duration,
-    pub(super) process_tree: process_tree::ProcessTree,
+    pub(super) process_tree: process::ProcessTree,
     pub(super) child: Box<dyn Child + Send + Sync>,
     pub(super) slave: Option<Box<dyn SlavePty + Send>>,
     pub(super) reader: Option<JoinHandle<()>>,
@@ -100,7 +101,7 @@ impl ShellSession {
         fs_err::write(&record.command, command)?;
         let choice = self.current_choice();
         fs_err::write(record.script_for(choice), choice.command_script(command))?;
-        crate::file_publish::write_replace(&self.dispatch_file, command_id)
+        crate::publication::write_replace(&self.dispatch_file, command_id)
             .context("failed to publish command dispatch")?;
         let Some(invocation) = choice.invocation()? else {
             return Ok(());

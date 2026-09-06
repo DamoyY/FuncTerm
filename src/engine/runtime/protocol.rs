@@ -109,5 +109,5 @@ pub(crate) fn waiting_from_seconds(seconds: f64) -> Result<Duration> {
         .context("waiting must be a finite non-negative number of seconds")
 }
 #[cfg(test)]
-#[path = "protocol/protocol_tests.rs"]
+#[path = "../../../tests/unit/runtime/serialization.rs"]
 mod tests;

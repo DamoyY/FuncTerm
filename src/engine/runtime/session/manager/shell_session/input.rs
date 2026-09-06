@@ -1,7 +1,7 @@
 use super::ShellSession;
 use crate::runtime::protocol::KeyboardInput;
-use crate::runtime::session::keyboard::{self, InputBatch, InputDelivery};
-use alloc::sync::Arc;
+use crate::runtime::session::keyboard::{InputBatch, InputDelivery};
+use alloc::{borrow::Cow, sync::Arc};
 use anyhow::{Context as _, Result};
 use core::time::Duration;
 use std::io::Write as _;
@@ -19,7 +19,7 @@ pub(in crate::engine::runtime::session::manager) enum KeyboardWriteFailure {
 impl ShellSession {
     pub(in crate::engine::runtime::session::manager) fn write_keyboard_for_running_command(
         &self,
-        input: KeyboardInput,
+        input: &KeyboardInput,
         waiting: Duration,
     ) -> Result<(), KeyboardWriteFailure> {
         let busy = self.busy.lock();
@@ -41,19 +41,20 @@ impl ShellSession {
         self.screen.wait_for_output(revision, waiting)?;
         Ok(())
     }
-    fn write_keyboard(&self, input: KeyboardInput) -> Result<InputDelivery> {
+    #[expect(
+        clippy::pattern_type_mismatch,
+        reason = "borrow the request payload without cloning its text or bytes"
+    )]
+    fn write_keyboard(&self, input: &KeyboardInput) -> Result<InputDelivery> {
         let shell_bytes = match input {
-            KeyboardInput::Text(text) => self
-                .current_choice()
-                .keyboard_bytes(text.as_bytes())
-                .into_owned(),
-            KeyboardInput::Bytes(bytes) => bytes,
+            KeyboardInput::Text(text) => self.current_choice().keyboard_bytes(text.as_bytes()),
+            KeyboardInput::Bytes(bytes) => Cow::Borrowed(bytes.as_slice()),
         };
         let batch = InputBatch::from_bytes(&shell_bytes);
         let mut writer = self.writer.lock();
-        for event in batch.events() {
+        for segment in batch.segments() {
             writer
-                .write_all(keyboard::user_bytes(event))
+                .write_all(segment)
                 .context("failed to write to pty")?;
         }
         writer.flush().context("failed to flush pty writer")?;

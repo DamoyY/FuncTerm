@@ -60,6 +60,6 @@ impl StartupReporter {
     }
 }
 fn write_startup_file(path: &std::path::Path, text: &str) -> Result<()> {
-    crate::file_publish::write_replace(path, text)
+    crate::publication::write_replace(path, text)
         .with_context(|| format!("failed to publish startup report {}", path.display()))
 }

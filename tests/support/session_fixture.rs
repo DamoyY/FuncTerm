@@ -75,7 +75,7 @@ fn build_shell(
         active_shell_file: crate::test_fs::temp_dir("command-manager-active")
             .join("active-shell.txt"),
         command_start_timeout: core::time::Duration::from_secs(1),
-        process_tree: crate::runtime::session::manager::process_tree::ProcessTree::new(),
+        process_tree: crate::runtime::session::manager::process::ProcessTree::new(),
         child: Box::new(TestChild),
         slave: None,
         reader: None,

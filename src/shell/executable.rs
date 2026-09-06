@@ -1,6 +1,8 @@
+mod choice;
 mod snapshot_system;
+pub(crate) use self::choice::ShellChoice;
 use self::snapshot_system::SnapshotSystem;
-use super::{ShellChoice, shims};
+use super::shims;
 use crate::runtime::protocol::EnvironmentSnapshot;
 use anyhow::{Context as _, Result, bail};
 use std::ffi::OsStr;
@@ -129,4 +131,5 @@ fn same_file(left: &Path, right: &Path) -> bool {
     left_path == right_path
 }
 #[cfg(test)]
+#[path = "../../tests/unit/shell/binary_resolution.rs"]
 mod tests;

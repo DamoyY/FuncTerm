@@ -1,11 +1,9 @@
-mod input_mode;
 mod io;
-mod sequence;
+mod output_events;
 mod sync;
 mod title;
-use self::input_mode::InputModeTracker;
 pub(super) use self::io::start_reader;
-use self::sequence::ProtocolParser;
+use self::output_events::{OutputEvent, OutputParser};
 use self::title::CaptureRegistry;
 pub(super) use self::title::CommandTitle;
 use alloc::sync::Arc;
@@ -19,8 +17,8 @@ pub(super) struct Terminal {
 }
 struct TerminalState {
     parser: Parser,
-    protocol: ProtocolParser,
-    input_mode: InputModeTracker,
+    protocol: OutputParser,
+    win32_input: bool,
     captures: CaptureRegistry,
     revision: u64,
     reader_closed: bool,
@@ -39,8 +37,8 @@ impl Terminal {
             model_title: model_title.to_owned(),
             state: Mutex::new(TerminalState {
                 parser,
-                protocol: ProtocolParser::new(),
-                input_mode: InputModeTracker::new(),
+                protocol: OutputParser::new(),
+                win32_input: false,
                 captures: CaptureRegistry::new(model_title.to_owned()),
                 revision: 0,
                 reader_closed: false,
@@ -64,13 +62,14 @@ impl Terminal {
     }
     pub(super) fn process(&self, chunk: &[u8], host: &HostProfile) -> Result<Vec<HostReply>> {
         let mut state = self.state.lock();
-        let processed = state.process(chunk, host).and_then(|replies| {
+        let processed = (|| {
+            let replies = state.process(chunk, host)?;
             state.revision = state
                 .revision
                 .checked_add(1)
                 .context("terminal output revision overflow")?;
             Ok(replies)
-        });
+        })();
         match processed {
             Ok(replies) => {
                 drop(state);
@@ -96,60 +95,46 @@ pub(super) struct HostReply {
 impl TerminalState {
     fn process(&mut self, chunk: &[u8], host: &HostProfile) -> Result<Vec<HostReply>> {
         let mut replies = Vec::new();
-        let mut parsed_end = 0_usize;
-        let mut protocol_end = 0_usize;
-        while protocol_end < chunk.len() {
-            let remaining = chunk
-                .get(protocol_end..)
-                .context("terminal protocol offset exceeds PTY output")?;
+        let mut remaining = chunk;
+        while !remaining.is_empty() {
             let (consumed, event) = self.protocol.advance(remaining);
             if consumed == 0 {
                 bail!("terminal protocol parser made no progress");
             }
-            protocol_end = protocol_end
-                .checked_add(consumed)
-                .context("terminal protocol offset overflow")?;
-            let Some(protocol_event) = event else {
-                continue;
-            };
-            let segment = chunk
-                .get(parsed_end..protocol_end)
+            let (segment, tail) = remaining
+                .split_at_checked(consumed)
                 .context("terminal event offset exceeds PTY output")?;
-            self.process_screen(segment, host, &mut replies)?;
-            let screen_title = self.parser.screen().title().to_owned();
-            self.captures.handle(protocol_event, &screen_title)?;
-            parsed_end = protocol_end;
+            self.process_screen(segment, host, &mut replies);
+            match event {
+                Some(OutputEvent::InputMode(enabled)) => self.win32_input = enabled,
+                Some(OutputEvent::Capture(protocol_event)) => {
+                    self.captures
+                        .handle(protocol_event, self.parser.screen().title())?;
+                }
+                None => {}
+            }
+            remaining = tail;
         }
-        let tail = chunk
-            .get(parsed_end..)
-            .context("terminal tail offset exceeds PTY output")?;
-        self.process_screen(tail, host, &mut replies)?;
         Ok(replies)
     }
-    fn process_screen(
-        &mut self,
-        bytes: &[u8],
-        host: &HostProfile,
-        replies: &mut Vec<HostReply>,
-    ) -> Result<()> {
-        let parser = &mut self.parser;
-        self.input_mode
-            .process_segments(bytes, |segment, win32_input| {
-                parser.process(segment);
-                replies.extend(
-                    parser
-                        .screen_mut()
-                        .drain_events()
-                        .into_iter()
-                        .filter_map(|event| auto_reply_bytes(&event, host))
-                        .map(|reply_bytes| HostReply {
-                            bytes: reply_bytes,
-                            win32_input,
-                        }),
-                );
-            })
+    fn process_screen(&mut self, bytes: &[u8], host: &HostProfile, replies: &mut Vec<HostReply>) {
+        self.parser.process(bytes);
+        replies.extend(
+            self.parser
+                .screen_mut()
+                .drain_events()
+                .into_iter()
+                .filter_map(|event| auto_reply_bytes(&event, host))
+                .map(|reply_bytes| HostReply {
+                    bytes: reply_bytes,
+                    win32_input: self.win32_input,
+                }),
+        );
     }
 }
 #[cfg(test)]
-#[path = "terminal/terminal_tests.rs"]
+#[path = "../../../../tests/unit/terminal/ordered_controls.rs"]
+mod ordered_controls;
+#[cfg(test)]
+#[path = "../../../../tests/unit/terminal/title_capture.rs"]
 mod tests;

@@ -140,8 +140,7 @@ pub(super) fn write_failed_result(
         cwd: crate::text::path_text(&record.initial_cwd, "cwd")?,
     };
     let text = sonic_rs::to_string(&done).context("failed to serialize failed done file")?;
-    crate::file_publish::write_once(&record.done, text)
-        .context("failed to publish failed done file")
+    crate::publication::write_once(&record.done, text).context("failed to publish failed done file")
 }
 pub(super) fn command_note(stdout: &str, stderr: &str, extra: &str) -> String {
     let mut lines = Vec::new();
@@ -186,5 +185,5 @@ fn read_if_present(path: &Path, label: &str) -> Result<Option<Vec<u8>>> {
     }
 }
 #[cfg(test)]
-#[path = "records/record_tests.rs"]
+#[path = "../../../../tests/unit/runtime/command_records.rs"]
 mod tests;

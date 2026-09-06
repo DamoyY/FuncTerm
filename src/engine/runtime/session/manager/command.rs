@@ -3,7 +3,7 @@ mod outcome;
 mod result_view;
 mod start;
 #[cfg(test)]
-#[path = "command/command_tests.rs"]
+#[path = "../../../../../tests/unit/runtime/input_lifecycle.rs"]
 mod tests;
 use super::Manager;
 use crate::runtime::protocol::{EndReason, KeyboardInput, ViewResult};
@@ -16,7 +16,7 @@ impl Manager {
     pub(crate) fn manual_write(
         &self,
         tab_id: &str,
-        input: KeyboardInput,
+        input: &KeyboardInput,
         waiting: Duration,
     ) -> Result<ViewResult> {
         self.tabs.manual_write(tab_id, input, waiting)

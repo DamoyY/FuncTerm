@@ -2,8 +2,7 @@
 #![cfg_attr(windows, feature(windows_process_extensions_inherit_handles))]
 mod app;
 mod engine;
-mod file_publish;
-pub(crate) use app::{cli, commands, contract, path_text as text};
+pub(crate) use app::{cli, commands, contract, path_text as text, publication};
 pub(crate) use engine::{mcp, runtime, shim};
 pub mod shell;
 #[cfg(test)]

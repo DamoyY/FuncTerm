@@ -66,23 +66,5 @@ fn decode_entry(entry: &[u16]) -> Result<(OsString, OsString)> {
     Ok((OsString::from_wide(name), OsString::from_wide(value)))
 }
 #[cfg(test)]
-mod tests {
-    use super::decode_entry;
-    use std::ffi::OsString;
-    #[test]
-    fn ordinary_environment_entry_is_decoded() {
-        let entry = "PATH=C:\\Windows".encode_utf16().collect::<Vec<_>>();
-        assert_eq!(
-            decode_entry(&entry).unwrap(),
-            (OsString::from("PATH"), OsString::from("C:\\Windows"))
-        );
-    }
-    #[test]
-    fn hidden_drive_environment_entry_is_decoded() {
-        let entry = "=C:=C:\\work".encode_utf16().collect::<Vec<_>>();
-        assert_eq!(
-            decode_entry(&entry).unwrap(),
-            (OsString::from("=C:"), OsString::from("C:\\work"))
-        );
-    }
-}
+#[path = "../../../../../tests/unit/platform/utf16_environment.rs"]
+mod tests;
