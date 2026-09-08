@@ -85,8 +85,8 @@ pub(super) fn read_command_result(
     observed_time_consumption: Duration,
     title: String,
 ) -> Result<CommandSnapshot> {
-    let stdout = read_optional(&record.stdout)?;
-    let stderr = read_optional(&record.stderr)?;
+    let stdout = read_plain_output(&record.stdout)?;
+    let stderr = read_plain_output(&record.stderr)?;
     let done = read_done(&record.done)?;
     let exit_code = done.as_ref().map(|file| file.exit_code);
     let finished = done.is_some();
@@ -152,11 +152,13 @@ pub(super) fn command_note(stdout: &str, stderr: &str, extra: &str) -> String {
     }
     lines.join("\n")
 }
-fn read_optional(path: &Path) -> Result<String> {
+fn read_plain_output(path: &Path) -> Result<String> {
     let Some(bytes) = read_if_present(path, "file")? else {
         return Ok(String::new());
     };
-    decode_text(&bytes).with_context(|| format!("failed to decode {}", path.display()))
+    let text =
+        decode_text(&bytes).with_context(|| format!("failed to decode {}", path.display()))?;
+    Ok(fast_strip_ansi::strip_ansi_string(&text).into_owned())
 }
 fn decode_text(bytes: &[u8]) -> Result<String> {
     let encoding = encoding_rs::Encoding::for_bom(bytes)
